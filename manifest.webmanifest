@@ -1,0 +1,25 @@
+{
+  "name": "Alas del Poder",
+  "short_name": "Alas del Poder",
+  "description": "Pilota al Capitán Alba y libera países oprimidos por sus líderes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#18222f",
+  "theme_color": "#18222f",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
