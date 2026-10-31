@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script data-goatcounter="https://alasdelpoder.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 <style>html{height:100%;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:#18222f;color-scheme:light;-webkit-text-size-adjust:100%}body{margin:0;height:100%;font:14px system-ui,-apple-system,sans-serif;overscroll-behavior:none}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Alas del Poder</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Barlow+Condensed:wght@500;600;700&display=swap">
@@ -353,6 +354,28 @@ function load(){
   return fresh();
 }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+/* ---------- Analytics (GoatCounter) ---------- */
+const TQ = [];
+function track(name){
+  TQ.push(name);
+  const flush = () => {
+    const gc = window.goatcounter;
+    if (!gc || !gc.count) return false;
+    while (TQ.length) { const n = TQ.shift(); try { gc.count({ path:'evento/' + n, title:n, event:true }); } catch (e) {} }
+    return true;
+  };
+  if (!flush()) { let tries = 0; const iv = setInterval(() => { if (flush() || ++tries > 20) clearInterval(iv); }, 500); }
+}
+(function trackVisit(){
+  try {
+    const day = new Date().toISOString().slice(0, 10), last = localStorage.getItem('adp-last-day');
+    const hadSave = !!localStorage.getItem(KEY);
+    if (!last && !hadSave) track('jugador-nuevo');
+    else if (last !== day) track('volvio-otro-dia');
+    localStorage.setItem('adp-last-day', day);
+    if (window.matchMedia && matchMedia('(display-mode: standalone)').matches || navigator.standalone) track('abierto-como-app');
+  } catch (e) {}
+})();
 let S = load();
 
 const incomeTotal = () => COUNTRIES.reduce((a, c, i) => a + (S.conquered[i] ? c.income : 0), 0);
@@ -571,6 +594,7 @@ function startBattle(ci){
         launchT:1.4, bomberT:c.bomberEvery*0.6, homingT:c.homingEvery*0.6,
         cdHeavy:0, cdSuper:0, over:false, won:false, endT:0, chain:0, chainT:0, shake:0, raid:S.conquered[ci],
         hint:S.battles === 0 ? 5 : 0, rotateHint:LH > LW*1.1 ? 4 : 0, taunt:2.8, palaceTalk:0, banner:null, str:1, s:[1,1,1] };
+  track(G.raid ? 'saqueo-pais-' + (ci + 1) : 'inicio-pais-' + (ci + 1));
   layoutWorld(); buildCity(); placePalace();
   G.loserImg = svgImg(avatarSVG(c.av, true));
   P.x = LW*0.18; P.y = Math.min(groundY - 60, LH*0.5); P.tx = P.x; P.ty = P.y;
@@ -779,6 +803,7 @@ function endPhase2(){
   else banner('Fase 3', 'El palacio de gobierno');
 }
 function victory(){
+  if (!G.over) track(G.raid ? 'gano-saqueo-pais-' + (G.ci + 1) : 'libero-pais-' + (G.ci + 1));
   G.over = true; G.won = true; G.endT = 2.4; G.prize = G.raid ? raidValue(G.ci) : G.c.reward; G.chain = 16; G.chainT = 0; P.inv = 99;
   for (const e of G.em) boom(e.x, e.y, 0.5);
   for (const b of G.bombs) boom(b.x, b.y, 0.5);
@@ -789,6 +814,7 @@ function victory(){
   sfx('win');
 }
 function defeat(){
+  if (!G.over) track('perdio-pais-' + (G.ci + 1));
   P.alive = false; G.over = true; G.endT = 1.9; G.shake = 0.6;
   boom(P.x, P.y, 1.8);
 }
