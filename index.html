@@ -85,6 +85,13 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--brass);out
 .avatar{width:62px;height:62px;flex:none;border:2px solid var(--ink);background:var(--ink-soft);overflow:hidden}
 .avatar svg,.avatar img{display:block;width:100%;height:100%;object-fit:cover}
 .brand-row{display:flex;gap:14px;align-items:center}
+.btn-play{display:inline-grid;justify-items:center;gap:2px;margin-top:14px;font-family:var(--f-display);font-weight:400;font-size:30px;letter-spacing:.04em;padding:12px 34px 10px;min-height:64px;box-shadow:5px 5px 0 var(--ink);animation:playPulse 1.6s ease-in-out infinite}
+.btn-play small{font-family:var(--f-ui);font-weight:700;font-size:14px;letter-spacing:.08em;opacity:.9}
+@keyframes playPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.btn-play:active{animation:none}
+.inapp{background:var(--brass);color:var(--ink);border:2px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:10px 14px;font-size:16px;font-weight:600;line-height:1.35}
+@media (max-width:560px){.btn-play{width:100%}}
+@media (max-height:460px){.hero-face{width:60px;height:60px}.brand h1{font-size:40px}.btn-play{margin-top:10px}}
 .hero-face{width:84px;height:84px;flex:none;border:3px solid var(--paper);box-shadow:3px 3px 0 var(--ink);object-fit:cover;background:var(--ink-soft)}
 .d-kicker{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--signal);font-weight:700}
 .dossier h3{font-family:var(--f-display);font-weight:400;font-size:20px;line-height:1.05;margin:2px 0;text-wrap:balance}
@@ -191,7 +198,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--brass);out
 .cflag{width:30px;height:20px;display:inline-block;vertical-align:-3px;margin-right:6px}
 .lg-soon{background:#c9c4b4}
 .app-mode .fsbtn,.app-mode #fsHud{display:none}
-@media (prefers-reduced-motion:reduce){.btn,.region{transition:none}.ants{animation:none}}
+@media (prefers-reduced-motion:reduce){.btn,.region{transition:none}.ants,.btn-play{animation:none}}
 </style>
 
 </head>
@@ -244,7 +251,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--brass);out
       <div class="quote"><div class="avatar" id="mAv"></div><p id="mQuote"></p></div>
       <table class="ledger" id="mLedger"></table>
       <p class="note" id="mNote" hidden></p>
-      <button class="btn btn-go" id="mBtn">Volver al mapa</button>
+      <div class="actions"><button class="btn btn-go" id="mBtn">Volver al mapa</button><button class="btn" id="mBtn2" hidden>Volver al mapa</button></div>
     </div>
   </div>
 </div>
@@ -327,6 +334,9 @@ const TIER = {
   income:     [20, 28, 38, 50, 62, 78, 95, 115, 140, 170],
   stars:      [1, 1, 2, 2, 3, 3, 4, 4, 5, 5]
 };
+// Ayuda de novato (v1.2): países 1 a 4, cada vez menos. Del 5 en adelante la curva queda igual.
+const EASY = { armor:[3, 2, 2, 1], slow:[1.6, 1.35, 1.3, 1.1], inv:[2.2, 1.8, 1.7, 1.5] };
+const easy = (k, ci, d) => (EASY[k][ci] != null ? EASY[k][ci] : d);
 const COUNTRIES = BASE.map((c, i) => Object.assign({}, c, {
   tier:i, seed: 11 + i*13, theme: Object.assign({ kind:c.kind, flag:c.flag.c }, TH[c.kind]),
   def:TIER.def[i], fireEvery:TIER.fireEvery[i], mSpeed:TIER.mSpeed[i], bomberEvery:TIER.bomberEvery[i], bombs:TIER.bombs[i],
@@ -343,13 +353,13 @@ const CITY_PTS = 100, PALACE_PTS = 90;
 
 /* ---------- Save ---------- */
 const KEY = 'alas-del-poder-v4';
-const DEFAULT = { credits:150, plane:0, armor:0, warhead:0, heavy:3, super:1, conquered:Array(N).fill(false), raids:Array(N).fill(0), battles:0 };
+const DEFAULT = { credits:150, plane:0, armor:0, warhead:0, heavy:3, super:1, conquered:Array(N).fill(false), raids:Array(N).fill(0), battles:0, tut:false };
 const fresh = () => JSON.parse(JSON.stringify(DEFAULT));
 function normalize(s){ s.conquered = Array.from({ length:N }, (_, i) => !!(s.conquered || [])[i]); s.raids = Array.from({ length:N }, (_, i) => +((s.raids || [])[i]) || 0); s.armor = Math.min(s.armor || 0, ARMOR_COST.length); s.plane = Math.min(s.plane || 0, PLANES.length - 1); return s; }
 function load(){
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) { const s = JSON.parse(raw); if (s && typeof s.credits === 'number') return normalize(Object.assign(fresh(), s)); }
+    if (raw) { const s = JSON.parse(raw); if (s && !('tut' in s)) s.tut = (s.battles || 0) > 0; if (s && typeof s.credits === 'number') return normalize(Object.assign(fresh(), s)); }
   } catch (e) {}
   return fresh();
 }
@@ -377,6 +387,14 @@ function track(name){
   } catch (e) {}
 })();
 let S = load();
+// Navegador dentro de otra app (Instagram, Facebook, TikTok...): ahí el avance se puede perder.
+const IN_APP = (() => {
+  const ua = navigator.userAgent || '';
+  const m = [['Instagram', /Instagram/i], ['Facebook', /FBAN|FBAV|FB_IAB|FBIOS/i], ['Messenger', /Messenger/i], ['TikTok', /TikTok|musical_ly|BytedanceWebview/i], ['Snapchat', /Snapchat/i], ['WhatsApp', /WhatsApp/i], ['LINE', /\bLine\//]].find(([, r]) => r.test(ua));
+  return m ? m[0] : '';
+})();
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+if (IN_APP) track('navegador-interno');
 
 const incomeTotal = () => COUNTRIES.reduce((a, c, i) => a + (S.conquered[i] ? c.income : 0), 0);
 const nextTarget = () => { const i = S.conquered.indexOf(false); return i < 0 ? N - 1 : i; };
@@ -593,12 +611,12 @@ function startBattle(ci){
         pm:[], em:[], bombs:[], bombers:[], parts:[], floats:[], flashes:[], buildings:[],
         launchT:1.4, bomberT:c.bomberEvery*0.6, homingT:c.homingEvery*0.6,
         cdHeavy:0, cdSuper:0, over:false, won:false, endT:0, chain:0, chainT:0, shake:0, raid:S.conquered[ci],
-        hint:S.battles === 0 ? 5 : 0, rotateHint:LH > LW*1.1 ? 4 : 0, taunt:2.8, palaceTalk:0, banner:null, str:1, s:[1,1,1] };
+        hint:0, tut:!S.tut, tutT:0, moved:0, rotateHint:LH > LW*1.1 ? 4 : 0, taunt:2.8, palaceTalk:0, banner:null, str:1, s:[1,1,1] };
   track(G.raid ? 'saqueo-pais-' + (ci + 1) : 'inicio-pais-' + (ci + 1));
   layoutWorld(); buildCity(); placePalace();
   G.loserImg = svgImg(avatarSVG(c.av, true));
   P.x = LW*0.18; P.y = Math.min(groundY - 60, LH*0.5); P.tx = P.x; P.ty = P.y;
-  P.maxArmor = pl.armor + S.armor; P.armor = P.maxArmor; P.inv = 0; P.alive = true; P.fireT = 0.3; P.tilt = 0;
+  P.maxArmor = pl.armor + S.armor + easy('armor', ci, 0); P.armor = P.maxArmor; P.inv = 0; P.alive = true; P.fireT = 0.3; P.tilt = 0;
   $('#menu').hidden = true; $('#hud').hidden = false; $('#modal').hidden = true; $('#pause').hidden = true;
   $('#tName').textContent = c.name;
   measureHud();
@@ -687,7 +705,7 @@ function unitBox(u){
   return [u.x - 27, groundY - 30, u.x + 27, groundY];
 }
 function unitFire(u){
-  const tierK = 1.25 - G.c.tier*0.06;
+  const tierK = (1.25 - G.c.tier*0.06)*easy('slow', G.ci, 1);
   if (u.type === 'tank') { G.em.push(Object.assign(aimed(u.x - 30, groundY - 22, G.c.mSpeed*0.85, 0.12, 'shell'), {})); u.fireT = 2.6*tierK*(0.8 + Math.random()*0.4); }
   else if (u.type === 'aa') {
     const e = aimed(u.x - 14, groundY - 30, 300, 0.05, 'flak');
@@ -749,7 +767,7 @@ function hitBoss(m){
 function hurtPlayer(n){
   if (P.inv > 0 || !P.alive || G.won) return;
   n = n || 1;
-  P.armor = Math.max(0, P.armor - n); P.inv = 1.3; G.shake = 0.35; sfx('hit');
+  P.armor = Math.max(0, P.armor - n); P.inv = easy('inv', G.ci, 1.3); G.shake = 0.35; sfx('hit');
   if (n > 1) floater(P.x, P.y - 22, '−' + n + ' blindaje', '#ff8a7a');
   updateHUD();
   if (P.armor <= 0) defeat();
@@ -861,10 +879,16 @@ function finishBattle(){
   $('#mLedger').innerHTML = lines.map(([a, b]) => `<tr><td>${a}</td><td>${typeof b === 'number' ? '+' + fmt(b) : b}</td></tr>`).join('') +
     `<tr class="total"><td>Total</td><td>+${fmt(gain)}</td></tr>`;
   $('#mNote').textContent = note; $('#mNote').hidden = !note;
+  // Botón principal: seguir jugando sin pasar por el mapa.
+  nextBattle = !G.won ? G.ci : (!G.raid && G.ci + 1 < N ? G.ci + 1 : null);
+  $('#mBtn').textContent = nextBattle == null ? 'Volver al mapa' : !G.won ? '↻ Reintentar' : '▶ Siguiente: ' + COUNTRIES[nextBattle].short;
+  $('#mBtn2').textContent = G.won ? 'Volver al mapa' : 'Volver al mapa y mejorar el avión';
+  $('#mBtn2').hidden = nextBattle == null;
   $('#hud').hidden = true; $('#modal').hidden = false;
   mode = 'result';
   setTimeout(() => $('#mBtn').focus(), 50);
 }
+let nextBattle = null;
 function backToMenu(){
   $('#modal').hidden = true; $('#pause').hidden = true; $('#hud').hidden = true;
   G = null; mode = 'menu'; save(); MV = null; $('#menu').hidden = false; renderMenu();
@@ -907,6 +931,11 @@ function update(dt){
     const dx = P.tx - P.x, dy = P.ty - P.y, d = Math.hypot(dx, dy);
     const step = Math.min(d, pl.speed*dt);
     if (d > 0.5) { P.x += dx/d*step; P.y += dy/d*step; }
+    if (G.tut) {   // tutorial: termina cuando el jugador mueve el avión por primera vez
+      if (G.intro <= 0) G.tutT += dt;
+      if (d > 0.5) G.moved += step;
+      if (G.moved > 70) { G.tut = false; S.tut = true; save(); track('aprendio-a-volar'); G.hint = 4.5; sfx('buy'); }
+    }
     const want = d > 0.5 ? (dy/d)*Math.min(1, d/40)*0.35 : 0;
     P.tilt += (want - P.tilt)*Math.min(1, dt*8);
     if (Math.random() < 0.5) puff(P.x - 26, P.y + 1, 'rgba(255,255,255,.35)', 2.5, 0.35, -60, 0, 4);
@@ -920,15 +949,15 @@ function update(dt){
   G.cdSuper = Math.max(0, G.cdSuper - dt);
 
   // enemy spawning
-  const active = !G.over && G.intro <= 0 && G.grace <= 0;
+  const active = !G.over && G.intro <= 0 && G.grace <= 0 && !(G.tut && G.tutT < 12);   // en el tutorial el enemigo espera hasta 12 s
   if (active) {
     const rage = 1 + (1 - G.str)*0.7;
     if (G.phase !== 2) {
       G.launchT -= dt*rage;
-      if (G.launchT <= 0) { launchEnemy(false); G.launchT = c.fireEvery*(0.7 + Math.random()*0.6)*(G.phase === 3 ? 0.8 : 1); }
+      if (G.launchT <= 0) { launchEnemy(false); G.launchT = c.fireEvery*easy('slow', G.ci, 1)*(0.7 + Math.random()*0.6)*(G.phase === 3 ? 0.8 : 1); }
     }
     G.bomberT -= dt*(1 + (1 - G.str)*0.4)*(G.phase === 2 ? 0.7 : 1);
-    if (G.bomberT <= 0) { spawnBomber(); G.bomberT = c.bomberEvery*(0.8 + Math.random()*0.4); }
+    if (G.bomberT <= 0) { spawnBomber(); G.bomberT = c.bomberEvery*easy('slow', G.ci, 1)*(0.8 + Math.random()*0.4); }
     if (c.homingEvery && G.str <= c.homingBelow) {
       G.homingT -= dt;
       if (G.homingT <= 0) { launchEnemy(true); G.homingT = c.homingEvery*(0.85 + Math.random()*0.3); }
@@ -1572,10 +1601,12 @@ function render(){
       textOutlined('— Capitana Tormenta', LW/2, ty + 26, 17, '#f0b43a');
       ctx.globalAlpha = 1;
     }
-    if (G.hint > 0 && G.taunt <= 0 && !G.banner) {
+    if (G.tut && G.intro <= 0 && G.taunt <= 0 && !G.over) drawTutorial();
+    else if (G.hint > 0 && G.taunt <= 0 && !G.banner) {
       ctx.globalAlpha = Math.min(1, G.hint);
-      textOutlined('Arrastra el dedo para volar · el misil básico dispara solo', LW/2, LH*0.36, 19, '#efe2bf');
-      textOutlined('Vuela bajo: la ciudad está abajo a la derecha', LW/2, LH*0.36 + 24, 19, '#f0b43a');
+      const ts = Math.min(26, LW/24), ty = Math.max(topSafe + 34, LH*0.3);
+      textOutlined('¡Eso es! Tu avión dispara solo', LW/2, ty, ts, '#efe2bf');
+      textOutlined('Baja a la altura de los edificios', LW/2, ty + ts*1.25, ts*0.8, '#f0b43a');
       ctx.globalAlpha = 1;
     }
     if (G.banner) drawBanner();
@@ -1588,6 +1619,39 @@ function render(){
     drawPlane(ctx, LW*0.5 + Math.sin(time*0.6)*LW*0.25, LH*0.32 + Math.sin(time*1.3)*14, Math.cos(time*1.3)*0.08, S.plane, 1);
   }
   drawClouds(true, th);
+}
+
+/* ---------- Tutorial: dedo que enseña a arrastrar ---------- */
+const TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+function drawHand(x, y, press, k){   // la punta del dedo queda en (x, y)
+  ctx.save(); ctx.translate(x, y);
+  if (press > 0) { ctx.strokeStyle = 'rgba(255,246,230,' + press.toFixed(2) + ')'; ctx.lineWidth = 3*k; ctx.beginPath(); ctx.arc(0, 0, (9 + (1 - press)*20)*k, 0, Math.PI*2); ctx.stroke(); }
+  ctx.rotate(-0.3); ctx.scale(k, k);
+  ctx.fillStyle = '#fff1dc'; ctx.strokeStyle = '#18222f'; ctx.lineWidth = 2.5;
+  rrect(-27, 32, 14, 24, 7); ctx.fill(); ctx.stroke();          // pulgar
+  rrect(-17, 26, 38, 40, 11); ctx.fill(); ctx.stroke();         // palma
+  rrect(-7, 0, 14, 40, 7); ctx.fill(); ctx.stroke();            // índice
+  ctx.fillStyle = '#18222f'; ctx.globalAlpha *= 0.25;
+  ctx.fillRect(-5, 3, 10, 6);         // uña
+  ctx.restore();
+}
+function drawTutorial(){
+  const T = 2.1, u = (G.tutT % T)/T, k = Math.max(0.8, Math.min(1.5, LH/380));
+  const ax = P.x + 6, ay = P.y + 28;
+  let bx = Math.min(LW*0.5, P.x + 130), by = Math.min(groundY - 40, P.y + 120);
+  if (by - ay < 50) by = ay - 110;
+  const e = u < 0.15 ? 0 : u < 0.7 ? (1 - Math.cos((u - 0.15)/0.55*Math.PI))/2 : 1;
+  const hx = ax + (bx - ax)*e, hy = ay + (by - ay)*e;
+  const fade = u > 0.85 ? 1 - (u - 0.85)/0.15 : 1;
+  ctx.save(); ctx.globalAlpha = fade;
+  ctx.setLineDash([7, 7]); ctx.strokeStyle = 'rgba(255,241,220,.85)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
+  drawHand(hx, hy, u < 0.15 ? 1 - u/0.15 : 0, k);
+  ctx.restore();
+  const ts = Math.min(30, LW/20), ty = Math.max(topSafe + 36, LH*0.24);
+  const pulse = 1 + Math.sin(time*5)*0.04;
+  textOutlined(TOUCH ? 'Arrastra el dedo para volar' : 'Mueve el ratón para volar', LW/2, ty, ts*pulse, '#efe2bf');
+  textOutlined('Tu avión dispara solo', LW/2, ty + ts*1.2, ts*0.72, '#f0b43a');
 }
 
 /* ---------- New threats: drawing ---------- */
@@ -2093,11 +2157,19 @@ function arsenalHTML(){
       <div class="buys">${S.warhead < 5 ? buyBtn('warhead', WARHEAD_COST[S.warhead]) : '<span class="desc">Máximo</span>'}</div></div>
   </div>`;
 }
+function playBtnHTML(){
+  const owned = S.conquered.filter(Boolean).length, nt = nextTarget();
+  const sub = !owned ? 'Primera misión: ' + COUNTRIES[0].short
+    : owned >= N ? 'Combatir restos en ' + COUNTRIES[nt].short
+    : 'Siguiente: ' + COUNTRIES[nt].short;
+  return `<button class="btn btn-go btn-play" data-action="play">▶ ${owned ? 'Continuar' : 'Jugar'}<small>${sub}</small></button>`;
+}
 function renderMenu(){
   const inc = incomeTotal(), owned = S.conquered.filter(Boolean).length;
   $('#menu').innerHTML = `<div class="menu-inner gutter">
+    ${IN_APP ? `<div class="inapp">Estás jugando dentro de ${IN_APP}. Para no perder tu avance, ábrelo en ${IS_IOS ? 'Safari' : 'Chrome'}: toca el menú (⋯) y elige «Abrir en el navegador».</div>` : ''}
     <header class="top">
-      <div class="brand"><div class="brand-row"><img class="hero-face" src="${IMG_SRC.alba_face || ''}" alt="Capitán Alba"><h1>Alas del Poder</h1></div><p>Eres el Capitán Alba, un piloto rebelde. Derriba a los líderes que oprimen a cada país, y cada país liberado se une a tu causa con sus recursos.</p></div>
+      <div class="brand"><div class="brand-row"><img class="hero-face" src="${IMG_SRC.alba_face || ''}" alt="Capitán Alba"><h1>Alas del Poder</h1></div>${playBtnHTML()}<p>Eres el Capitán Alba, un piloto rebelde. Derriba a los líderes que oprimen a cada país, y cada país liberado se une a tu causa con sus recursos.</p></div>
       <div style="display:grid;gap:10px;justify-items:end"><button class="fsbtn" data-action="fullscreen">⛶ Pantalla completa</button>
       <div class="treasury"><span class="lbl">Tesoro</span><b class="num">${coin}${fmt(S.credits)}</b><span class="sub">${inc ? '+' + inc + ' por misión de tus territorios' : 'Aún no controlas territorios'}</span></div></div>
     </header>
@@ -2117,9 +2189,9 @@ function renderMenu(){
       <section class="panel paper"><h2 class="sec-title">Arsenal</h2>${arsenalHTML()}</section>
     </div>
     <footer class="foot">
-      <p><b>Cómo se juega.</b> Arrastra el mapa para ver el mundo, toca un país de Aurelia y luego <b>Liberar</b>. Cada batalla tiene tres fases: la ciudad, el ejército y el palacio de gobierno. Cada país trae amenazas nuevas: drones, radares, cazas, minas, escudos, clima y un jefe final.</p>
+      <p><b>Cómo se juega.</b> Toca <b>Jugar</b> para ir a la siguiente misión, o elige un país de Aurelia en el mapa y toca <b>Liberar</b>. Cada batalla tiene tres fases: la ciudad, el ejército y el palacio de gobierno. Cada país trae amenazas nuevas: drones, radares, cazas, minas, escudos, clima y un jefe final.</p>
       <p>Arrastra el dedo para mover el avión. El misil básico dispara solo. Toca <b>Pesado</b> o <b>Súper</b> para lanzar los especiales. En computadora: ratón o <kbd>WASD</kbd> para mover, <kbd>J</kbd> pesado, <kbd>K</kbd> súper.</p>
-      <p>Prototipo v0.6. El mercado global de recursos llega en la próxima versión.</p>
+      <p>Versión 1.2.</p>
       <button class="reset" data-action="reset">Reiniciar progreso</button>
     </footer>
   </div>`;
@@ -2144,6 +2216,7 @@ $('#menu').addEventListener('click', e => {
   const spend = cost => { if (S.credits < cost) return false; S.credits -= cost; sfx('buy'); return true; };
   if (a === 'fullscreen') { toggleFullscreen(); return; }
   if (a === 'attack') { startBattle(+btn.dataset.i); return; }
+  if (a === 'play') { track('toco-jugar'); startBattle(nextTarget()); return; }
   if (a === 'plane') { const n = PLANES[S.plane + 1]; if (n && spend(n.cost)) S.plane++; }
   if (a === 'heavy1' && spend(HEAVY_COST)) S.heavy += 1;
   if (a === 'heavy5' && spend(HEAVY5_COST)) S.heavy += 5;
@@ -2231,7 +2304,8 @@ $('#pauseBtn').addEventListener('click', pause);
 $('#resumeBtn').addEventListener('click', resume);
 $('#retreatBtn').addEventListener('click', () => { S.battles = (S.battles || 0) + 1; backToMenu(); });
 $('#muteBtn').addEventListener('click', () => { muted = !muted; $('#muteBtn').textContent = muted ? '×' : '♪'; $('#muteBtn').setAttribute('aria-label', muted ? 'Activar sonido' : 'Silenciar sonido'); });
-$('#mBtn').addEventListener('click', backToMenu);
+$('#mBtn').addEventListener('click', () => { if (nextBattle != null) { const ci = nextBattle; nextBattle = null; G = null; MV = null; startBattle(ci); } else backToMenu(); });
+$('#mBtn2').addEventListener('click', () => { nextBattle = null; backToMenu(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
 /* ---------- Loop ---------- */
